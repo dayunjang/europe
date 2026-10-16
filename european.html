@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What's in my bag? - 유럽 여행 가방 싸기</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --border-color: #e2e8f0;
+        }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 30px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 700px;
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 35px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        h2 { color: var(--primary); margin-bottom: 10px; font-size: 26px; }
+        h3 { font-size: 20px; margin-top: 15px; color: #334155; }
+        p { color: #64748b; font-size: 15px; line-height: 1.5; }
+        input[type="text"] {
+            width: 80%;
+            max-width: 320px;
+            padding: 14px 18px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            margin: 15px 0;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.1s;
+            margin: 8px;
+        }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-teacher { background: #059669; }
+        .btn-teacher:hover { background: #047857; }
+        
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 25px 0;
+        }
+        .item-btn {
+            background: #f1f5f9;
+            border: 2px solid var(--border-color);
+            border-radius: 14px;
+            padding: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .item-btn:hover { background: #e2e8f0; }
+        .item-btn.selected {
+            background: #e0e7ff;
+            border-color: var(--primary);
+            color: var(--primary);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+        }
+        .score-badge {
+            display: inline-block;
+            background: #ede9fe;
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .teacher-panel-btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
+        }
+        ul#student-list {
+            text-align: left;
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        ul#student-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- 초기 로그인 화면 -->
+        <div id="login-screen" class="card">
+            <h2>🌍 What's in my bag?</h2>
+            <p>유럽 여행 가방 싸기 인터랙티브 수업 자료</p>
+            <br>
+            <input type="text" id="student-name" placeholder="이름 또는 모둠명을 입력하세요"><br>
+            <button class="btn" onclick="joinAsStudent()">학생으로 참여하기</button>
+            <button class="btn btn-teacher" onclick="joinAsTeacher()">교사 제어판 접속</button>
+        </div>
+
+        <!-- 학생 게임 화면 -->
+        <div id="student-screen" class="card" style="display:none;">
+            <div class="score-badge">현재 내 점수: <span id="s-score">0</span>점</div>
+            <h3 id="s-title">선생님의 시작을 기다리는 중...</h3>
+            <div id="game-content">
+                <p>잠시만 기다려 주세요. 수업이 곧 시작됩니다.</p>
+            </div>
+        </div>
+
+        <!-- 교사 통제 화면 -->
+        <div id="teacher-screen" class="card" style="display:none; text-align: left;">
+            <h2 style="text-align: center;">👨‍🏫 교사 제어 모니터링 패널</h2>
+            <p style="text-align: center;">학급 상황에 맞게 단계와 여행지를 통제하세요.</p>
+            
+            <h3>1. 여행지 선택</h3>
+            <div class="teacher-panel-btns">
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(0)">런던(여름)</button>
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(1)">아테네(여름)</button>
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(2)">모스크바(여름)</button>
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(3)">파리(겨울)</button>
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(4)">리스본(겨울)</button>
+                <button class="btn" style="padding: 10px 14px; font-size: 14px;" onclick="setCity(5)">로바니에미(겨울)</button>
+            </div>
+
+            <h3>2. 수업 단계 제어</h3>
+            <div class="teacher-panel-btns">
+                <button class="btn btn-teacher" onclick="setStep('location')">① 위치 찾기</button>
+                <button class="btn btn-teacher" onclick="setStep('packing')">② 가방 싸기</button>
+                <button class="btn btn-teacher" onclick="setStep('result')">③ 정답 공개</button>
+            </div>
+
+            <h3>📊 실시간 접속 학생 현황</h3>
+            <ul id="student-list">
+                <li style="color: #94a3b8; text-align: center; border: none;">접속한 학생이 없습니다.</li>
+            </ul>
+        </div>
+    </div>
+
+<script>
+    const socket = io();
+    let role = '';
+    let selectedBag = [];
+
+    function joinAsStudent() {
+        const name = document.getElementById('student-name').value;
+        if (!name) return alert('이름 또는 모둠명을 입력해주세요!');
+        role = 'student';
+        socket.emit('join_game', { name: name });
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('student-screen').style.display = 'block';
+    }
+
+    function joinAsTeacher() {
+        role = 'teacher';
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('teacher-screen').style.display = 'block';
+    }
+
+    function setCity(index) {
+        socket.emit('teacher_command', { action: 'change_city', index: index });
+    }
+
+    function setStep(step) {
+        socket.emit('teacher_command', { action: 'next_step', step: step });
+    }
+
+    socket.on('update_state', (state) => {
+        if (role === 'teacher') {
+            const listEl = document.getElementById('student-list');
+            listEl.innerHTML = '';
+            const ids = Object.keys(state.students);
+            if (ids.length === 0) {
+                listEl.innerHTML = '<li style="color: #94a3b8; text-align: center; border: none;">접속한 학생이 없습니다.</li>';
+            } else {
+                ids.forEach(id => {
+                    const s = state.students[id];
+                    listEl.innerHTML += `<li>👤 <b>${s.name}</b> — <b>${s.score}점</b></li>`;
+                });
+            }
+        }
+
+        if (role === 'student') {
+            const myData = state.students[socket.id];
+            if (myData) document.getElementById('s-score').innerText = myData.score;
+
+            const city = state.cities[state.currentCityIndex];
+            const contentEl = document.getElementById('game-content');
+            
+            if (state.step === 'waiting') {
+                document.getElementById('s-title').innerText = '선생님의 다음 지시를 기다리는 중...';
+                contentEl.innerHTML = '<p>화면을 주목해주세요!</p>';
+            } else if (state.step === 'location') {
+                document.getElementById('s-title').innerText = `📍 [${city.season}] 도시 위치 파악하기`;
+                contentEl.innerHTML = `<div style="background:#f1f5f9; padding:20px; border-radius:12px; margin:20px 0;"><strong>지리 힌트:</strong> ${city.hint}</div><p>제시된 힌트와 국기를 보고 지도에서 알맞은 국가를 찾아보세요.</p>`;
+            } else if (state.step === 'packing') {
+                document.getElementById('s-title').innerText = `🧳 ${city.name} (${city.climate} 기후) 가방 싸기`;
+                let html = `<p>기후 특성에 알맞은 준비물을 모두 골라 담아주세요!</p><div class="options-grid">`;
+                city.options.forEach(opt => {
+                    const isSel = selectedBag.includes(opt) ? 'selected' : '';
+                    html += `<div class="item-btn ${isSel}" onclick="toggleItem('${opt}')">${opt}</div>`;
+                });
+                html += `</div><button class="btn" style="width:100%; margin-top:10px;" onclick="submitBag()">가방 싸기 완료 제출</button>`;
+                contentEl.innerHTML = html;
+            } else if (state.step === 'result') {
+                document.getElementById('s-title').innerText = `✨ ${city.name} 정답 및 해설`;
+                contentEl.innerHTML = `<div style="background:#ecfdf5; border:1px solid #a7f3d0; padding:20px; border-radius:12px; margin:20px 0; color:#065f46;"><h3 style="margin-top:0; color:#047857;">정답 준비물</h3><p style="font-size:18px; font-weight:bold; color:#065f46;">${city.answer.join(', ')}</p></div><p>선생님의 설명을 들으며 기후적 원인과 인간 생활의 관계를 정리해 봅시다!</p>`;
+            }
+        }
+    });
+
+    function toggleItem(item) {
+        const idx = selectedBag.indexOf(item);
+        if (idx > -1) selectedBag.splice(idx, 1);
+        else selectedBag.push(item);
+        
+        const btns = document.querySelectorAll('.item-btn');
+        btns.forEach(b => {
+            if (selectedBag.includes(b.innerText)) b.classList.add('selected');
+            else b.classList.remove('selected');
+        });
+    }
+
+    function submitBag() {
+        if (selectedBag.length === 0) return alert('준비물을 최소 한 개 이상 골라주세요!');
+        socket.emit('submit_bag', selectedBag);
+        alert('답안이 제출되었습니다! 결과를 기다려주세요.');
+        selectedBag = [];
+    }
+
+    socket.on('result_feedback', (res) => {
+        alert(res.message);
+    });
+</script>
+
+</body>
+</html>
